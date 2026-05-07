@@ -108,3 +108,33 @@ void stats_print_periodic(void)
     memcpy(g_last_stats, g_stats, sizeof(g_stats));
     g_last_time = now;
 }
+
+uint64_t stats_get_rx_pkts(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].rx_pkts : 0;
+}
+
+uint64_t stats_get_tx_pkts(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].tx_pkts : 0;
+}
+
+uint64_t stats_get_rx_bytes(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].rx_bytes : 0;
+}
+
+uint64_t stats_get_ipv4_pkts(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].ipv4_pkts : 0;
+}
+
+uint64_t stats_get_tcp_pkts(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].tcp_pkts : 0;
+}
+
+uint64_t stats_get_udp_pkts(uint16_t port_id)
+{
+    return (port_id < STATS_MAX_PORTS) ? g_stats[port_id].udp_pkts : 0;
+}

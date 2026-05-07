@@ -39,4 +39,12 @@ void stats_record_tx(uint16_t port_id, uint16_t nb_tx, uint16_t nb_total);
  */
 void stats_print_periodic(void);
 
+/* Getters for testing */
+uint64_t stats_get_rx_pkts(uint16_t port_id);
+uint64_t stats_get_tx_pkts(uint16_t port_id);
+uint64_t stats_get_rx_bytes(uint16_t port_id);
+uint64_t stats_get_ipv4_pkts(uint16_t port_id);
+uint64_t stats_get_tcp_pkts(uint16_t port_id);
+uint64_t stats_get_udp_pkts(uint16_t port_id);
+
 #endif /* STATS_H */

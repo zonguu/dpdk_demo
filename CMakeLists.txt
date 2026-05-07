@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(dpdk_pcap_demo C)
+project(dpdk_pcap_demo C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -12,10 +12,13 @@ pkg_check_modules(DPDK REQUIRED libdpdk)
 file(GLOB SOURCES src/*.c)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
-
 target_include_directories(${PROJECT_NAME} PRIVATE ${DPDK_INCLUDE_DIRS})
 target_compile_options(${PROJECT_NAME} PRIVATE ${DPDK_CFLAGS_OTHER})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DPDK_LIBRARIES})
+SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/output
+)
+message(STATUS "runtime output directory: ${CMAKE_SOURCE_DIR}/output")
 
 # Enable common warnings for learning
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -35,4 +38,10 @@ option(ENABLE_PIPELINE "Enable multi-lcore ring pipeline" OFF)
 if(ENABLE_PIPELINE)
     message(STATUS "Pipeline mode enabled (multi-lcore)")
     target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_PIPELINE)
+endif()
+
+# Tests
+option(BUILD_TESTS "Build unit tests with gtest" ON)
+if(BUILD_TESTS)
+    add_subdirectory(test)
 endif()
