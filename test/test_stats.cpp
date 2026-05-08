@@ -115,3 +115,87 @@ TEST_F(StatsTest, NonIPv4CountedAsOther) {
 
     rte_pktmbuf_free(m);
 }
+
+
+TEST_F(StatsTest, RecordRxZeroCount) {
+    // Calling with nb_rx = 0 should not change counters
+    struct rte_mbuf* bufs[1] = {nullptr};
+    stats_record_rx(0, bufs, 0);
+    EXPECT_EQ(stats_get_rx_pkts(0), 0);
+    EXPECT_EQ(stats_get_rx_bytes(0), 0);
+}
+
+TEST_F(StatsTest, RecordTxZeroCount) {
+    stats_record_tx(0, 0, 0);
+    EXPECT_EQ(stats_get_tx_pkts(0), 0);
+}
+
+TEST_F(StatsTest, ManyPacketsAccumulate) {
+    // Build 100 identical small IPv4 packets
+    uint8_t raw[42] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        0x45, 0x00, 0x00, 0x1c,
+        0x00, 0x01, 0x00, 0x00,
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+        0x30, 0x39, 0x00, 0x50,
+        0x00, 0x08, 0x00, 0x00
+    };
+
+    struct rte_mbuf* bufs[10];
+    for (int i = 0; i < 10; i++) {
+        bufs[i] = rte_pktmbuf_alloc(pool);
+        ASSERT_NE(bufs[i], nullptr);
+        void* dst = rte_pktmbuf_append(bufs[i], sizeof(raw));
+        ASSERT_NE(dst, nullptr);
+        rte_memcpy(dst, raw, sizeof(raw));
+    }
+
+    // Call in batches to simulate multiple bursts
+    for (int batch = 0; batch < 10; batch++) {
+        stats_record_rx(0, bufs, 10);
+    }
+
+    EXPECT_EQ(stats_get_rx_pkts(0), 100);
+    EXPECT_EQ(stats_get_rx_bytes(0), 100 * 42);
+    EXPECT_EQ(stats_get_ipv4_pkts(0), 100);
+    EXPECT_EQ(stats_get_udp_pkts(0), 100);
+
+    for (int i = 0; i < 10; i++) {
+        rte_pktmbuf_free(bufs[i]);
+    }
+}
+
+TEST_F(StatsTest, OutOfRangePortId) {
+    // Port ID beyond STATS_MAX_PORTS should be silently ignored
+    uint8_t raw[42] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        0x45, 0x00, 0x00, 0x1c,
+        0x00, 0x01, 0x00, 0x00,
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+        0x30, 0x39, 0x00, 0x50,
+        0x00, 0x08, 0x00, 0x00
+    };
+    struct rte_mbuf* m = rte_pktmbuf_alloc(pool);
+    ASSERT_NE(m, nullptr);
+    void* dst = rte_pktmbuf_append(m, sizeof(raw));
+    ASSERT_NE(dst, nullptr);
+    rte_memcpy(dst, raw, sizeof(raw));
+
+    struct rte_mbuf* bufs[1] = {m};
+    stats_record_rx(STATS_MAX_PORTS + 10, bufs, 1);
+    stats_record_tx(STATS_MAX_PORTS + 10, 1, 1);
+
+    // Valid port 0 should remain zero
+    EXPECT_EQ(stats_get_rx_pkts(0), 0);
+    EXPECT_EQ(stats_get_tx_pkts(0), 0);
+
+    rte_pktmbuf_free(m);
+}

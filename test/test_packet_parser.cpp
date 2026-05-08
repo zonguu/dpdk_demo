@@ -199,3 +199,182 @@ TEST_F(PacketParserTest, FormatOutput) {
     EXPECT_GT(n, 0);
     EXPECT_STREQ(buf, "UDP 192.168.1.1:12345 -> 192.168.1.2:80 (len=64)");
 }
+
+TEST_F(PacketParserTest, MalformedIHLTooSmall) {
+    // Ethernet(14) + IPv4 with IHL=4 (16 bytes, invalid)
+    uint8_t pkt[34] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4: version=4, IHL=4 -> invalid
+        0x44, 0x00, 0x00, 0x14,
+        0x00, 0x00, 0x00, 0x00,
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+    };
+    struct rte_mbuf* m = make_packet(pkt, sizeof(pkt));
+    ASSERT_NE(m, nullptr);
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, -1);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, TotalLengthSmallerThanHeader) {
+    // Ethernet(14) + IPv4(20) with total_length = 10 (< 20)
+    uint8_t pkt[34] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4: total_length = 10
+        0x45, 0x00, 0x00, 0x0a,
+        0x00, 0x00, 0x00, 0x00,
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+    };
+    struct rte_mbuf* m = make_packet(pkt, sizeof(pkt));
+    ASSERT_NE(m, nullptr);
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, -1);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, FragmentedUDPNoL4Ports) {
+    // Ethernet(14) + IPv4(20) + UDP(8) = 42 bytes
+    // Set MF flag and fragment offset > 0
+    uint8_t pkt[42] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        // IPv4: fragment_offset has MF=1, offset=8 (0x2040 in BE)
+        0x45, 0x00, 0x00, 0x1c,
+        0x00, 0x00, 0x20, 0x40, // flags/frag offset
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+        // UDP header present but should be ignored due to fragmentation
+        0x30, 0x39, 0x00, 0x50,
+        0x00, 0x08, 0x00, 0x00
+    };
+    struct rte_mbuf* m = make_packet(pkt, sizeof(pkt));
+    ASSERT_NE(m, nullptr);
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(info.is_ipv4, 1);
+    EXPECT_EQ(info.ip_proto, IPPROTO_UDP);
+    // L4 ports should NOT be parsed for fragmented packets
+    EXPECT_EQ(info.is_udp, 0);
+    EXPECT_EQ(info.src_port, 0);
+    EXPECT_EQ(info.dst_port, 0);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, FragmentedTCPNoL4Ports) {
+    // Ethernet(14) + IPv4(20) + TCP(20) = 54 bytes
+    // MF flag set
+    uint8_t pkt[54] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        0x45, 0x00, 0x00, 0x28,
+        0x00, 0x00, 0x20, 0x00, // MF=1
+        0x40, 0x06, 0x00, 0x00,
+        10, 0, 0, 1,
+        10, 0, 0, 2,
+        0x01, 0xBB, 0xD4, 0x31,
+        0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00,
+        0x50, 0x02, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00
+    };
+    struct rte_mbuf* m = make_packet(pkt, sizeof(pkt));
+    ASSERT_NE(m, nullptr);
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(info.is_ipv4, 1);
+    EXPECT_EQ(info.ip_proto, IPPROTO_TCP);
+    EXPECT_EQ(info.is_tcp, 0);
+    EXPECT_EQ(info.src_port, 0);
+    EXPECT_EQ(info.dst_port, 0);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, EmptyMbuf) {
+    struct rte_mbuf* m = rte_pktmbuf_alloc(pool);
+    ASSERT_NE(m, nullptr);
+    // Do not append any data -> data_len == 0
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, -1);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, ZeroPortNumbers) {
+    // UDP with both ports = 0
+    uint8_t pkt[42] = {
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55,
+        0x08, 0x00,
+        0x45, 0x00, 0x00, 0x1c,
+        0x00, 0x01, 0x00, 0x00,
+        0x40, 0x11, 0x00, 0x00,
+        192, 168, 1, 1,
+        192, 168, 1, 2,
+        0x00, 0x00, 0x00, 0x00, // src=0, dst=0
+        0x00, 0x08, 0x00, 0x00
+    };
+    struct rte_mbuf* m = make_packet(pkt, sizeof(pkt));
+    ASSERT_NE(m, nullptr);
+
+    packet_info_t info;
+    int ret = packet_parse(m, &info);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(info.is_udp, 1);
+    EXPECT_EQ(info.src_port, 0);
+    EXPECT_EQ(info.dst_port, 0);
+
+    rte_pktmbuf_free(m);
+}
+
+TEST_F(PacketParserTest, FormatICMP) {
+    packet_info_t info = {};
+    info.is_ipv4 = 1;
+    info.is_icmp = 1;
+    info.src_ip = (10U | (0U << 8) | (0U << 16) | (1U << 24));
+    info.dst_ip = (10U | (0U << 8) | (0U << 16) | (2U << 24));
+    info.ip_total_len = 32;
+
+    char buf[256];
+    int n = packet_format(&info, buf, sizeof(buf));
+    EXPECT_GT(n, 0);
+    EXPECT_STREQ(buf, "ICMP 10.0.0.1 -> 10.0.0.2 (len=32)");
+}
+
+TEST_F(PacketParserTest, FormatNonTcpUdpIcmp) {
+    packet_info_t info = {};
+    info.is_ipv4 = 1;
+    info.ip_proto = 47; // GRE
+    info.src_ip = (1U | (2U << 8) | (3U << 16) | (4U << 24)); // 1.2.3.4
+    info.dst_ip = (5U | (6U << 8) | (7U << 16) | (8U << 24)); // 5.6.7.8
+    info.ip_total_len = 100;
+
+    char buf[256];
+    int n = packet_format(&info, buf, sizeof(buf));
+    EXPECT_GT(n, 0);
+    EXPECT_STREQ(buf, "IP proto=47 1.2.3.4 -> 5.6.7.8 (len=100)");
+}

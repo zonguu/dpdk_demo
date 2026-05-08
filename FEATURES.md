@@ -53,16 +53,27 @@
 
 ## Level 2：需要理解 DPDK 机制
 
-### 6. 多队列 + 多 lcore 收包
-- **做什么**：每个 lcore 负责一个端口的 RX Queue，实现**真并行收包**。
-- **学什么**：`rte_eal_remote_launch()`、lcore ID 与 queue 映射、避免竞争。
+### 6. 多队列 + 多 lcore 收包 ✅ 已实现
+- **做什么**：每个 lcore 负责一个端口（或一个队列），实现**真并行收包**。
+- **学什么**：`rte_eal_remote_launch()`、lcore ID 与端口映射、避免竞争。
 - **关键 API**：`rte_lcore_id()`、`rte_eal_remote_launch()`、`RTE_LCORE_FOREACH_WORKER()`。
+- **代码位置**：`src/multi_queue_worker.h` / `.c`
+- **编译开关**：`./build.sh --multicore`
+- **运行要求**：至少 2 个 lcore（`-l 0-1`）
+- **实测性能**（双核 `net_null`）：
+  - 单核模式：约 **4100 万 pps**
+  - 双核模式：约 **7500 万 pps**（接近线性扩展）
 - **验证**：启动时加 `-l 0-3`，在 4 个核上同时跑，CPU 使用率拉满。
 
-### 7. L2 转发（l2fwd）
-- **做什么**：双端口场景下，端口 0 收到的包从端口 1 发出，反之亦然。
-- **学什么**：端口配对（port pair）、MAC 地址学习（可选）、转发延迟概念。
-- **关键 API**：`rte_eth_tx_burst(dst_port, ...)`，注意 mbuf 所有权转移。
+### 7. L2 转发（l2fwd）✅ 已实现
+- **做什么**：双端口场景下，端口 0 收到的包从端口 1 发出，反之亦然；**交换源/目的 MAC 地址**。
+- **学什么**：端口配对（port pair）、MAC 地址交换、转发延迟概念、mbuf 所有权转移。
+- **关键 API**：`rte_eth_tx_burst(dst_port, ...)`、`rte_ether_addr_copy()`。
+- **代码位置**：`src/l2fwd_worker.h` / `.c`
+- **编译开关**：`./build.sh --l2fwd`
+- **运行要求**：至少 1 个端口（2 个端口时 0<->1 转发，1 个端口时自环）
+- **实测性能**（双核 `net_null`）：
+  - 约 **3700 万 pps**（含 MAC 交换开销）
 - **练习**：先用 `net_null0/net_null1` 跑通逻辑，再换 `net_pcap` 验证真实包内容。
 
 ### 8. Ring 无锁队列（lcore 间通信）✅ 已实现

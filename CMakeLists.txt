@@ -40,6 +40,20 @@ if(ENABLE_PIPELINE)
     target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_PIPELINE)
 endif()
 
+# Optional: Multi-lcore direct polling (default OFF)
+option(ENABLE_MULTICORE "Enable multi-lcore direct polling" OFF)
+if(ENABLE_MULTICORE)
+    message(STATUS "Multi-lcore mode enabled")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_MULTICORE)
+endif()
+
+# Optional: L2 forwarding (default OFF)
+option(ENABLE_L2FWD "Enable L2 forwarding mode" OFF)
+if(ENABLE_L2FWD)
+    message(STATUS "L2 forwarding mode enabled")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_L2FWD)
+endif()
+
 # Tests
 option(BUILD_TESTS "Build unit tests with gtest" ON)
 if(BUILD_TESTS)

@@ -37,12 +37,29 @@ int packet_parse(struct rte_mbuf *mbuf, packet_info_t *info)
     info->ip_proto = ip_hdr->next_proto_id;
     info->ip_total_len = rte_be_to_cpu_16(ip_hdr->total_length);
 
-    size_t ip_hdr_len = (ip_hdr->version_ihl & 0x0F) * 4;
-    void *l4_hdr = (char *)ip_hdr + ip_hdr_len;
+    /* Validate IP header length: IHL must be at least 5 (20 bytes) */
+    uint8_t ihl = ip_hdr->version_ihl & 0x0F;
+    if (unlikely(ihl < 5))
+        return -1;
+
+    size_t ip_hdr_len = ihl * 4;
+
+    /* Validate IP total length >= header length */
+    if (unlikely(info->ip_total_len < ip_hdr_len))
+        return -1;
+
+    /* Check for fragmentation: if MF is set or fragment offset > 0,
+     * we cannot reliably parse L4 headers. */
+    uint16_t frag_offset = rte_be_to_cpu_16(ip_hdr->fragment_offset);
+    int is_fragmented = (frag_offset & (RTE_IPV4_HDR_MF_FLAG | RTE_IPV4_HDR_OFFSET_MASK)) != 0;
+
     size_t l4_offset = sizeof(struct rte_ether_hdr) + ip_hdr_len;
+    void *l4_hdr = (char *)ip_hdr + ip_hdr_len;
 
     switch (info->ip_proto) {
     case IPPROTO_TCP:
+        if (is_fragmented)
+            break;
         if (likely(rte_pktmbuf_data_len(mbuf) >= l4_offset + sizeof(struct rte_tcp_hdr))) {
             struct rte_tcp_hdr *tcp = (struct rte_tcp_hdr *)l4_hdr;
             info->is_tcp = 1;
@@ -51,6 +68,8 @@ int packet_parse(struct rte_mbuf *mbuf, packet_info_t *info)
         }
         break;
     case IPPROTO_UDP:
+        if (is_fragmented)
+            break;
         if (likely(rte_pktmbuf_data_len(mbuf) >= l4_offset + sizeof(struct rte_udp_hdr))) {
             struct rte_udp_hdr *udp = (struct rte_udp_hdr *)l4_hdr;
             info->is_udp = 1;

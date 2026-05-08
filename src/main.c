@@ -16,6 +16,12 @@
 #ifdef ENABLE_PIPELINE
 #include "pipeline.h"
 #endif
+#ifdef ENABLE_MULTICORE
+#include "multi_queue_worker.h"
+#endif
+#ifdef ENABLE_L2FWD
+#include "l2fwd_worker.h"
+#endif
 
 /* Print system hugepage info via /proc/meminfo */
 static void print_system_memory_info(void)
@@ -141,7 +147,13 @@ int main(int argc, char **argv)
     }
 
     /* 7. Run packet processing loop (RX -> process -> TX) */
-#ifdef ENABLE_PIPELINE
+#if defined(ENABLE_L2FWD)
+    printf("[MAIN] Running L2 forwarding mode.\n");
+    l2fwd_loop();
+#elif defined(ENABLE_MULTICORE)
+    printf("[MAIN] Running multi-lcore mode.\n");
+    multi_lcore_loop();
+#elif defined(ENABLE_PIPELINE)
     if (rte_lcore_count() >= 2) {
         printf("[MAIN] Running in pipeline mode (multi-lcore)\n");
         ret = pipeline_run();
