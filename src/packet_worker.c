@@ -1,6 +1,7 @@
 #include "packet_worker.h"
 #include "dpdk_init.h"
 #include "stats.h"
+#include "pcap_dump.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -57,6 +58,7 @@ void packet_loop(void)
                 continue;
 
             stats_record_rx(port, bufs, nb_rx);
+            pcap_dump_mbufs(bufs, nb_rx);
 
             for (uint16_t i = 0; i < nb_rx; i++) {
                 process_packet(bufs[i], port);

@@ -2,6 +2,7 @@
 #include "dpdk_init.h"
 #include "packet_worker.h"
 #include "stats.h"
+#include "pcap_dump.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -67,6 +68,7 @@ void l2fwd_loop(void)
                 continue;
 
             stats_record_rx(port, bufs, nb_rx);
+            pcap_dump_mbufs(bufs, nb_rx);
 
             /* Swap MAC addresses for true L2 forwarding */
             for (uint16_t i = 0; i < nb_rx; i++) {

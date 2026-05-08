@@ -2,6 +2,7 @@
 #include "dpdk_init.h"
 #include "packet_worker.h"
 #include "stats.h"
+#include "pcap_dump.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -44,6 +45,7 @@ static int lcore_main(void *arg)
                 continue;
 
             stats_record_rx(port, bufs, nb_rx);
+            pcap_dump_mbufs(bufs, nb_rx);
 
             const uint16_t nb_tx = rte_eth_tx_burst(port, 0, bufs, nb_rx);
             stats_record_tx(port, nb_tx, nb_rx);

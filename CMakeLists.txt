@@ -54,6 +54,13 @@ if(ENABLE_L2FWD)
     target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_L2FWD)
 endif()
 
+# Optional: PCAP dump of received packets (default OFF)
+option(ENABLE_PCAP_DUMP "Enable PCAP dump of RX packets" OFF)
+if(ENABLE_PCAP_DUMP)
+    message(STATUS "PCAP dump enabled")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_PCAP_DUMP)
+endif()
+
 # Tests
 option(BUILD_TESTS "Build unit tests with gtest" ON)
 if(BUILD_TESTS)

@@ -9,6 +9,7 @@ ENABLE_ASAN=OFF
 ENABLE_PIPELINE=OFF
 ENABLE_MULTICORE=OFF
 ENABLE_L2FWD=OFF
+ENABLE_PCAP_DUMP=OFF
 for arg in "$@"; do
     case $arg in
         --asan)
@@ -27,6 +28,10 @@ for arg in "$@"; do
             ENABLE_L2FWD=ON
             shift
             ;;
+        --pcap-dump)
+            ENABLE_PCAP_DUMP=ON
+            shift
+            ;;
     esac
 done
 
@@ -35,12 +40,13 @@ mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
 # Configure and build
-echo "[INFO] Configuring with CMake... (ASan=${ENABLE_ASAN}, Pipeline=${ENABLE_PIPELINE}, Multicore=${ENABLE_MULTICORE}, L2FWD=${ENABLE_L2FWD})"
+echo "[INFO] Configuring with CMake... (ASan=${ENABLE_ASAN}, Pipeline=${ENABLE_PIPELINE}, Multicore=${ENABLE_MULTICORE}, L2FWD=${ENABLE_L2FWD}, PCAP=${ENABLE_PCAP_DUMP})"
 cmake .. -DCMAKE_BUILD_TYPE=Debug \
     -DENABLE_ASAN=${ENABLE_ASAN} \
     -DENABLE_PIPELINE=${ENABLE_PIPELINE} \
     -DENABLE_MULTICORE=${ENABLE_MULTICORE} \
-    -DENABLE_L2FWD=${ENABLE_L2FWD}
+    -DENABLE_L2FWD=${ENABLE_L2FWD} \
+    -DENABLE_PCAP_DUMP=${ENABLE_PCAP_DUMP}
 
 echo "[INFO] Building..."
 make -j$(nproc)

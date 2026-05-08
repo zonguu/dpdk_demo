@@ -35,19 +35,26 @@
   =====================================
   ```
 
-### 4. 收包落盘（pcap 文件写出）
-- **做什么**：不 echo 回端口，而是把收到的原始包写入 `.pcap` 文件，类似 tcpdump。
-- **学什么**：pcap 文件格式、多文件轮转（rotate）、文件大小限制。
-- **关键 API**：标准 `fopen()`/`fwrite()` + pcap global header + pkt header。
-- **注意**：不需要 DPDK API，纯用户态文件 I/O。
+### 4. 收包落盘（pcap 文件写出）✅ 已实现
+- **做什么**：把收到的原始包写入 `.pcap` 文件，类似 tcpdump。
+- **学什么**：pcap 文件格式、多线程文件 I/O 同步（rte_spinlock）、mbuf 分段处理。
+- **关键 API**：标准 `fopen()`/`fwrite()` + `rte_spinlock_lock()` + mbuf chain 遍历。
+- **代码位置**：`src/pcap_dump.h` / `.c`
+- **编译开关**：`./build.sh --pcap-dump`
+- **输出文件**：`output/captured.pcap`
+- **特点**：支持多核并发写入（自旋锁保护），支持 chained mbuf（多段包）。
+- **验证**：`tcpdump -r output/captured.pcap` 或 Wireshark 打开检查。
 
-### 5. 内存池动态监控
-- **做什么**：主循环中**每秒打印一次 mempool 使用率**（已用 / 总数）。
-- **学什么**：`rte_mempool_avail_count()` / `rte_mempool_in_use_count()`。
+### 5. 内存池动态监控 ✅ 已实现
+- **做什么**：主循环中**每秒打印一次所有 mempool 的使用率**。
+- **学什么**：`rte_mempool_walk()`、`rte_mempool_avail_count()`、`rte_mempool_in_use_count()`。
+- **代码位置**：`src/stats.c` 中的 `stats_print_periodic()`
 - **预期输出**：
   ```
-  [MEMPOOL] mbuf_pool_0: used=128/8191 (1.6%)
+  [MEMPOOL] Snapshot:
+  [MEMPOOL]   mbuf_pool_0              : avail= 8191 in-use=    0 total= 8191
   ```
+- **特点**：自动遍历系统中所有 mempool，无需手动注册。
 
 ---
 

@@ -3,6 +3,7 @@
 #include "packet_parser.h"
 #include "packet_worker.h"
 #include "stats.h"
+#include "pcap_dump.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -39,11 +40,12 @@ static int worker_main(void *arg)
             continue;
         }
 
-        /* Process each packet: stats + echo TX */
+        /* Process each packet: stats + dump + echo TX */
         for (unsigned int i = 0; i < nb; i++) {
             port = mbufs[i]->port;
             stats_record_rx(port, &mbufs[i], 1);
         }
+        pcap_dump_mbufs(mbufs, nb);
 
         /* Simple echo: send back to the source port.
          * In a real app you would map src_port -> dst_port.

@@ -7,6 +7,7 @@
 #include <rte_cycles.h>
 #include <rte_ethdev.h>
 #include <rte_malloc.h>
+#include <rte_mempool.h>
 
 static port_stats_t g_stats[STATS_MAX_PORTS];
 static port_stats_t g_last_stats[STATS_MAX_PORTS];
@@ -105,8 +106,23 @@ void stats_print_periodic(void)
            (double)total_rx_bps / 1e9);
     printf("=====================================\n");
 
+    /* Memory pool snapshot */
+    printf("[MEMPOOL] Snapshot:\n");
+    extern void stats_mempool_walk_cb(struct rte_mempool *mp, void *arg);
+    rte_mempool_walk(stats_mempool_walk_cb, NULL);
+
     memcpy(g_last_stats, g_stats, sizeof(g_stats));
     g_last_time = now;
+}
+
+void stats_mempool_walk_cb(struct rte_mempool *mp, void *arg)
+{
+    (void)arg;
+    printf("[MEMPOOL]   %-24s avail=%5u in-use=%5u total=%5u\n",
+           mp->name,
+           rte_mempool_avail_count(mp),
+           rte_mempool_in_use_count(mp),
+           mp->size);
 }
 
 uint64_t stats_get_rx_pkts(uint16_t port_id)

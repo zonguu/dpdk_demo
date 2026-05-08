@@ -12,6 +12,7 @@
 
 #include "dpdk_init.h"
 #include "packet_worker.h"
+#include "pcap_dump.h"
 
 #ifdef ENABLE_PIPELINE
 #include "pipeline.h"
@@ -120,6 +121,10 @@ int main(int argc, char **argv)
     print_system_memory_info();
     print_dpdk_memory_info();
 
+#ifdef ENABLE_PCAP_DUMP
+    pcap_dump_open("output/captured.pcap");
+#endif
+
     /* Print mempool availability summary */
     printf("[MEMPOOL] Availability summary:\n");
     for (int s = 0; s < RTE_MAX_NUMA_NODES; s++) {
@@ -177,6 +182,10 @@ int main(int argc, char **argv)
         rte_eth_dev_close(port);
     }
 
-    /* 8. EAL cleanup handled by rte_eal_cleanup() on process exit */
+#ifdef ENABLE_PCAP_DUMP
+    pcap_dump_close();
+#endif
+
+    /* 9. EAL cleanup handled by rte_eal_cleanup() on process exit */
     return 0;
 }
