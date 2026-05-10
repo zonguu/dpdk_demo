@@ -10,6 +10,9 @@ set(SRC_LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/dpdk_init.c
     ${CMAKE_SOURCE_DIR}/src/packet_worker.c
     ${CMAKE_SOURCE_DIR}/src/pipeline.c
+    ${CMAKE_SOURCE_DIR}/src/packet_modify.c
+    ${CMAKE_SOURCE_DIR}/src/acl_filter.c
+    ${CMAKE_SOURCE_DIR}/src/token_bucket.c
 )
 
 add_library(dpdk_demo_lib STATIC ${SRC_LIB_SOURCES})
@@ -22,6 +25,9 @@ add_executable(dpdk_demo_test
     test_main.cpp
     test_packet_parser.cpp
     test_stats.cpp
+    test_packet_modify.cpp
+    test_acl_filter.cpp
+    test_token_bucket.cpp
 )
 
 set_target_properties(dpdk_demo_test PROPERTIES

@@ -61,6 +61,20 @@ if(ENABLE_PCAP_DUMP)
     target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_PCAP_DUMP)
 endif()
 
+# Optional: ACL filter + token bucket rate limiting (default ON for demo)
+option(ENABLE_ACL_RATELIMIT "Enable ACL filter and token bucket rate limiter" ON)
+if(ENABLE_ACL_RATELIMIT)
+    message(STATUS "ACL + Token Bucket rate limiting enabled")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_ACL_RATELIMIT)
+endif()
+
+# Optional: Packet modify + checksum recalc (default ON for demo)
+option(ENABLE_PKT_MODIFY "Enable packet modification and checksum recalc" ON)
+if(ENABLE_PKT_MODIFY)
+    message(STATUS "Packet modification + checksum recalc enabled")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_PKT_MODIFY)
+endif()
+
 # Tests
 option(BUILD_TESTS "Build unit tests with gtest" ON)
 if(BUILD_TESTS)

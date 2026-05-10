@@ -3,6 +3,8 @@
 #include "packet_worker.h"
 #include "stats.h"
 #include "pcap_dump.h"
+#include "acl_filter.h"
+#include "token_bucket.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -11,6 +13,7 @@
 #include <rte_ethdev.h>
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
+#include <rte_cycles.h>
 
 /* Each lcore processes ports where port_id % num_lcores == lcore_id */
 static int lcore_main(void *arg)
@@ -33,6 +36,10 @@ static int lcore_main(void *arg)
     printf(first ? "(none)\n" : "\n");
     fflush(stdout);
 
+    /* Per-lcore token bucket */
+    struct token_bucket tb;
+    token_bucket_init(&tb, 100ULL * 1000ULL * 1000ULL, 0);
+
     while (!force_quit) {
         for (uint16_t port = 0; port < nb_ports && port < MAX_PORTS; port++) {
             if (port % nb_lcores != lcore_id)
@@ -47,11 +54,28 @@ static int lcore_main(void *arg)
             stats_record_rx(port, bufs, nb_rx);
             pcap_dump_mbufs(bufs, nb_rx);
 
-            const uint16_t nb_tx = rte_eth_tx_burst(port, 0, bufs, nb_rx);
-            stats_record_tx(port, nb_tx, nb_rx);
+            /* ACL filter */
+            uint16_t nb_acl = 0;
+            for (uint16_t i = 0; i < nb_rx; i++) {
+                if (acl_filter_evaluate(bufs[i])) {
+                    bufs[nb_acl++] = bufs[i];
+                } else {
+                    rte_pktmbuf_free(bufs[i]);
+                }
+            }
+            if (nb_acl == 0)
+                continue;
 
-            if (unlikely(nb_tx < nb_rx)) {
-                for (uint16_t i = nb_tx; i < nb_rx; i++) {
+            /* Token bucket rate limiter */
+            uint16_t nb_allowed = token_bucket_apply(&tb, bufs, nb_acl);
+            if (nb_allowed == 0)
+                continue;
+
+            const uint16_t nb_tx = rte_eth_tx_burst(port, 0, bufs, nb_allowed);
+            stats_record_tx(port, nb_tx, nb_allowed);
+
+            if (unlikely(nb_tx < nb_allowed)) {
+                for (uint16_t i = nb_tx; i < nb_allowed; i++) {
                     rte_pktmbuf_free(bufs[i]);
                 }
             }

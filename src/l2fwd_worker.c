@@ -3,6 +3,7 @@
 #include "packet_worker.h"
 #include "stats.h"
 #include "pcap_dump.h"
+#include "packet_modify.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -12,17 +13,6 @@
 #include <rte_lcore.h>
 #include <rte_mbuf.h>
 #include <rte_ether.h>
-
-static inline void
-swap_mac_addresses(struct rte_mbuf *mbuf)
-{
-    struct rte_ether_hdr *eth_hdr = rte_pktmbuf_mtod(mbuf, struct rte_ether_hdr *);
-    struct rte_ether_addr tmp;
-
-    rte_ether_addr_copy(&eth_hdr->src_addr, &tmp);
-    rte_ether_addr_copy(&eth_hdr->dst_addr, &eth_hdr->src_addr);
-    rte_ether_addr_copy(&tmp, &eth_hdr->dst_addr);
-}
 
 static inline uint16_t
 get_dst_port(uint16_t src_port, uint16_t nb_ports)
@@ -73,6 +63,13 @@ void l2fwd_loop(void)
             /* Swap MAC addresses for true L2 forwarding */
             for (uint16_t i = 0; i < nb_rx; i++) {
                 swap_mac_addresses(bufs[i]);
+            }
+
+            /* Swap IP + port and recalc checksum (symmetric forwarding demo) */
+            for (uint16_t i = 0; i < nb_rx; i++) {
+                packet_modify_swap_ip(bufs[i]);
+                packet_modify_swap_port(bufs[i]);
+                packet_modify_recalc_checksum(bufs[i]);
             }
 
             uint16_t dst_port = get_dst_port(port, nb_ports);

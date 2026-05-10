@@ -4,6 +4,8 @@
 #include "packet_worker.h"
 #include "stats.h"
 #include "pcap_dump.h"
+#include "acl_filter.h"
+#include "token_bucket.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +34,10 @@ static int worker_main(void *arg)
 
     stats_init();
 
+    /* Per-lcore token bucket */
+    struct token_bucket tb;
+    token_bucket_init(&tb, 100ULL * 1000ULL * 1000ULL, 0);
+
     while (!force_quit) {
         unsigned int nb = rte_ring_dequeue_burst(g_rx_ring, (void **)mbufs,
                                                   BURST_SIZE, NULL);
@@ -47,10 +53,21 @@ static int worker_main(void *arg)
         }
         pcap_dump_mbufs(mbufs, nb);
 
-        /* Simple echo: send back to the source port.
-         * In a real app you would map src_port -> dst_port.
-         * Here we burst per-port to respect rte_eth_tx_burst(). */
+        /* ACL filter */
+        unsigned int nb_acl = 0;
         for (unsigned int i = 0; i < nb; i++) {
+            if (acl_filter_evaluate(mbufs[i])) {
+                mbufs[nb_acl++] = mbufs[i];
+            } else {
+                rte_pktmbuf_free(mbufs[i]);
+            }
+        }
+
+        /* Token bucket rate limiter */
+        uint16_t nb_allowed = token_bucket_apply(&tb, mbufs, (uint16_t)nb_acl);
+
+        /* Simple echo: send back to the source port */
+        for (uint16_t i = 0; i < nb_allowed; i++) {
             port = mbufs[i]->port;
             uint16_t nb_tx = rte_eth_tx_burst(port, 0, &mbufs[i], 1);
             stats_record_tx(port, nb_tx, 1);

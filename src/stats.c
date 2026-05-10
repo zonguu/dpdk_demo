@@ -1,5 +1,6 @@
 #include "stats.h"
 #include "packet_parser.h"
+#include "acl_filter.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -104,6 +105,15 @@ void stats_print_periodic(void)
            (unsigned long)total_rx_pps,
            (unsigned long)total_tx_pps,
            (double)total_rx_bps / 1e9);
+
+    /* ACL filter stats */
+    uint64_t acl_accepted, acl_dropped;
+    acl_filter_get_stats(&acl_accepted, &acl_dropped);
+    if (acl_accepted > 0 || acl_dropped > 0) {
+        printf("ACL     accepted=%lu dropped=%lu\n",
+               (unsigned long)acl_accepted,
+               (unsigned long)acl_dropped);
+    }
     printf("=====================================\n");
 
     /* Memory pool snapshot */

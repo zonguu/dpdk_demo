@@ -108,11 +108,14 @@
 - **关键 API**：`rte_timer_subsystem_init()`、`rte_timer_init()`、`rte_timer_manage()`。
 - **注意**：必须在 EAL 线程（lcore）上调用 `rte_timer_manage()`。
 
-### 10. 简单 ACL / 包过滤
+### 10. 简单 ACL / 包过滤 ✅ 已实现
 - **做什么**：只转发特定五元组的包，或丢弃特定目标端口的包。
-- **学什么**：`rte_acl.h` 或直接用 if 判断（五元组匹配）。
-- **示例**：丢弃目的端口为 443 的包，其余 echo 回去。
-- **进阶**：尝试 `rte_flow_create()` 做硬件/软件 offload 过滤。
+- **学什么**：五元组匹配、硬编码规则表、原子计数统计。
+- **关键 API**：无外部 `rte_acl` 依赖，纯 C if 判断保持简单。
+- **代码位置**：`src/acl_filter.h` / `.c`
+- **规则示例**：默认丢弃 UDP dst_port=9/19（discard/chargen），其余放行。
+- **统计**：`acl_filter_get_stats()` 输出 accepted / dropped 计数。
+- **测试**：`test/test_acl_filter.cpp`（4 个用例：accept、drop、non-IPv4、reset stats）
 
 ---
 
@@ -124,16 +127,23 @@
 - **关键 API**：`rte_kni_init()`、`rte_kni_alloc()`、`rte_kni_tx_burst()` / `rx_burst()`。
 - **前提**：需要编译 DPDK 时开启 KNI 模块（`CONFIG_RTE_LIBRTE_KNI=y`）。
 
-### 12. 包修改 + 校验和重算
-- **做什么**：修改包的源 IP 或目的 MAC，然后重新计算 IP checksum，再发送。
-- **学什么**：`rte_ipv4_udptcp_checksum()`、`rte_raw_cksum()`、endian 转换。
-- **关键 API**：`rte_ipv4_hdr` 字段修改、`rte_ipv4_cksum()`。
-- **验证**：用 `net_pcap` 输出到文件，再用 Wireshark 打开检查 checksum 是否正确。
+### 12. 包修改 + 校验和重算 ✅ 已实现
+- **做什么**：修改包的源/目的 IP 和 L4 端口，然后重新计算 IPv4 和 TCP/UDP checksum，再发送。
+- **学什么**：`rte_ipv4_cksum()`、`rte_ipv4_udptcp_cksum()`、endian 转换。
+- **关键 API**：`rte_ipv4_hdr` 字段修改、软 checksum 重算。
+- **代码位置**：`src/packet_modify.h` / `.c`
+- **集成**：`--l2fwd` 模式下自动执行 MAC + IP + Port 交换并重新计算 checksum（对称转发演示）。
+- **测试**：`test/test_packet_modify.cpp`（4 个用例：swap IP、swap port、recalc checksum、swap all）
 
-### 13. 简单 Token Bucket 限速
-- **做什么**：对 TX 方向做软件限速，比如限制每端口 100 Mbps。
-- **学什么**：令牌桶算法、`rte_get_timer_cycles()` 高精度时间戳。
-- **实现**：主循环中维护令牌数，有令牌才 `tx_burst()`，无令牌则把包 `rte_pktmbuf_free()` 或缓存。
+### 13. 简单 Token Bucket 限速 ✅ 已实现
+- **做什么**：对 TX 方向做软件限速，默认限制每核 100 Mbps。
+- **学什么**：令牌桶算法、`rte_get_timer_cycles()` 高精度时间戳、按 lcore 独立 bucket。
+- **代码位置**：`src/token_bucket.h` / `.c`
+- **关键参数**：
+  - `rate_bps = 100_000_000`（100 Mbps）
+  - `burst_bits = 1514 * 8`（1 MTU）
+- **集成**：单核/多核/Pipeline 模式均内置 ACL + Token Bucket 处理链。
+- **测试**：`test/test_token_bucket.cpp`（4 个用例：init、first packet、burst limit、replenish）
 
 ### 14. 热升级 / 优雅退出 + 资源统计
 - **做什么**：收到 `SIGUSR1` 时 dump 当前所有统计到文件，收到 `SIGINT` 时确保所有 mbuf 已释放再退出。
