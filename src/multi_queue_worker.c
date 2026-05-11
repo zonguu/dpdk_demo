@@ -5,6 +5,9 @@
 #include "pcap_dump.h"
 #include "acl_filter.h"
 #include "token_bucket.h"
+#include "packet_prefetch.h"
+#include "port_mirror.h"
+#include "tx_retry.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -51,8 +54,17 @@ static int lcore_main(void *arg)
             if (unlikely(nb_rx == 0))
                 continue;
 
+            /* Prefetch packet data before parsing/filtering */
+            packet_prefetch_burst(bufs, nb_rx);
+
             stats_record_rx(port, bufs, nb_rx);
             pcap_dump_mbufs(bufs, nb_rx);
+
+            /* Port mirroring to the paired port */
+            if (nb_ports >= 2) {
+                uint16_t mirror_port = port ^ 1;
+                port_mirror_send(mirror_port, bufs, nb_rx);
+            }
 
             /* ACL filter */
             uint16_t nb_acl = 0;
@@ -71,14 +83,9 @@ static int lcore_main(void *arg)
             if (nb_allowed == 0)
                 continue;
 
-            const uint16_t nb_tx = rte_eth_tx_burst(port, 0, bufs, nb_allowed);
+            /* TX with congestion retry instead of immediate drop */
+            uint16_t nb_tx = tx_retry_burst(port, 0, bufs, nb_allowed);
             stats_record_tx(port, nb_tx, nb_allowed);
-
-            if (unlikely(nb_tx < nb_allowed)) {
-                for (uint16_t i = nb_tx; i < nb_allowed; i++) {
-                    rte_pktmbuf_free(bufs[i]);
-                }
-            }
         }
 
         /* Only master prints periodic stats to avoid interleaved output */

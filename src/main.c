@@ -13,6 +13,7 @@
 #include "dpdk_init.h"
 #include "packet_worker.h"
 #include "pcap_dump.h"
+#include "mbuf_clone_demo.h"
 
 #ifdef ENABLE_PIPELINE
 #include "pipeline.h"
@@ -117,7 +118,10 @@ int main(int argc, char **argv)
         }
     }
 
-    /* 5. Print memory info after initialization */
+    /* 5. Run mbuf clone demonstration once at startup */
+    mbuf_clone_demo_run(mbuf_pools[0]);
+
+    /* 6. Print memory info after initialization */
     print_system_memory_info();
     print_dpdk_memory_info();
 

@@ -4,6 +4,8 @@
 #include "stats.h"
 #include "pcap_dump.h"
 #include "packet_modify.h"
+#include "packet_prefetch.h"
+#include "tx_retry.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -57,10 +59,13 @@ void l2fwd_loop(void)
             if (unlikely(nb_rx == 0))
                 continue;
 
+            /* Prefetch packet data before MAC/IP swapping */
+            packet_prefetch_burst(bufs, nb_rx);
+
             stats_record_rx(port, bufs, nb_rx);
             pcap_dump_mbufs(bufs, nb_rx);
 
-            /* Swap MAC addresses for true L2 forwarding */
+            /* Swap MAC addresses for true L2 forwarding */ 
             for (uint16_t i = 0; i < nb_rx; i++) {
                 swap_mac_addresses(bufs[i]);
             }
@@ -73,15 +78,8 @@ void l2fwd_loop(void)
             }
 
             uint16_t dst_port = get_dst_port(port, nb_ports);
-            const uint16_t nb_tx = rte_eth_tx_burst(dst_port, 0, bufs, nb_rx);
+            uint16_t nb_tx = tx_retry_burst(dst_port, 0, bufs, nb_rx);
             stats_record_tx(dst_port, nb_tx, nb_rx);
-
-            /* Free unsent packets */
-            if (unlikely(nb_tx < nb_rx)) {
-                for (uint16_t i = nb_tx; i < nb_rx; i++) {
-                    rte_pktmbuf_free(bufs[i]);
-                }
-            }
         }
 
         stats_print_periodic();

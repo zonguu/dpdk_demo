@@ -4,6 +4,11 @@
 #include "pcap_dump.h"
 #include "acl_filter.h"
 #include "token_bucket.h"
+#include "packet_prefetch.h"
+#include "port_mirror.h"
+#include "flow_table.h"
+#include "icmp_reply.h"
+#include "tx_retry.h"
 
 #include <stdio.h>
 #include <signal.h>
@@ -49,13 +54,20 @@ void packet_loop(void)
 
     stats_init();
 
+    /* Per-lcore flow table (rte_hash) for tracking 5-tuple flows */
+    struct flow_table *ft = flow_table_create("flow_tbl_0", 0);
+    if (ft) {
+        printf("[WORKER] Flow table enabled (max %u entries).\n",
+               FLOW_TABLE_MAX_ENTRIES);
+    }
+
     /* Per-lcore token bucket: 100 Mbps default, 1 MTU burst */
     struct token_bucket tb;
     token_bucket_init(&tb, 100ULL * 1000ULL * 1000ULL, 0);
 
     printf("[WORKER] Starting loop on %u port(s)... Press Ctrl-C to stop.\n",
            nb_ports);
-    printf("[WORKER] ACL + Token Bucket (100 Mbps) enabled in single-core mode.\n");
+    printf("[WORKER] ACL + Token Bucket + Prefetch + Mirror + Flow Table + ICMP Reply enabled.\n");
 
     while (!force_quit) {
         for (port = 0; port < nb_ports && port < MAX_PORTS; port++) {
@@ -65,23 +77,56 @@ void packet_loop(void)
             if (unlikely(nb_rx == 0))
                 continue;
 
+            /* 1. Prefetch packet data before parsing/filtering */
+            packet_prefetch_burst(bufs, nb_rx);
+
+            /* 2. Record RX stats and optionally dump to pcap */
             stats_record_rx(port, bufs, nb_rx);
             pcap_dump_mbufs(bufs, nb_rx);
 
-            /* ACL filter: drop packets matching hard-coded rules */
-            uint16_t nb_acl = 0;
+            /* 3. Port mirroring to the paired port */
+            if (nb_ports >= 2) {
+                uint16_t mirror_port = port ^ 1;
+                port_mirror_send(mirror_port, bufs, nb_rx);
+            }
+
+            /*
+             * 4. ICMP Echo Reply: if a packet is an ICMP Echo Request,
+             *    reply to it directly and do NOT pass it down the normal
+             *    TX path.  The mbuf is consumed by icmp_reply_send().
+             */
+            uint16_t nb_normal = 0;
             for (uint16_t i = 0; i < nb_rx; i++) {
+                if (icmp_reply_send(bufs[i], port) == 0) {
+                    /* Not an ICMP echo request; keep for normal processing */
+                    bufs[nb_normal++] = bufs[i];
+                }
+                /* If icmp_reply_send() returned 1, the mbuf was already
+                 * transmitted or freed, so we drop it from this burst. */
+            }
+            if (nb_normal == 0)
+                continue;
+
+            /* 5. Update flow table for all remaining packets */
+            if (ft) {
+                for (uint16_t i = 0; i < nb_normal; i++) {
+                    flow_table_record(ft, bufs[i]);
+                }
+            }
+
+            /* 6. ACL filter: drop packets matching hard-coded rules */
+            uint16_t nb_acl = 0;
+            for (uint16_t i = 0; i < nb_normal; i++) {
                 if (acl_filter_evaluate(bufs[i])) {
                     bufs[nb_acl++] = bufs[i];
                 } else {
                     rte_pktmbuf_free(bufs[i]);
                 }
             }
-
             if (nb_acl == 0)
                 continue;
 
-            /* Token bucket rate limiter */
+            /* 7. Token bucket rate limiter */
             uint16_t nb_allowed = token_bucket_apply(&tb, bufs, nb_acl);
             if (nb_allowed == 0)
                 continue;
@@ -90,18 +135,21 @@ void packet_loop(void)
                 process_packet(bufs[i], port);
             }
 
-            const uint16_t nb_tx = rte_eth_tx_burst(port, 0, bufs, nb_allowed);
+            /* 8. Transmit with congestion retry instead of direct free */
+            uint16_t nb_tx = tx_retry_burst(port, 0, bufs, nb_allowed);
             stats_record_tx(port, nb_tx, nb_allowed);
-
-            if (unlikely(nb_tx < nb_allowed)) {
-                for (uint16_t i = nb_tx; i < nb_allowed; i++) {
-                    rte_pktmbuf_free(bufs[i]);
-                }
-            }
         }
 
         stats_print_periodic();
+
+        /* 9. Print top flows every second (piggyback on stats timer) */
+        if (ft) {
+            flow_table_print_top(ft, 5);
+        }
     }
+
+    if (ft)
+        flow_table_destroy(ft);
 
     printf("[WORKER] Stopped.\n");
 }
