@@ -1,12 +1,12 @@
 #ifndef TX_RETRY_H
 #define TX_RETRY_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /**
  * @brief Transmit a burst of mbufs with limited retries on congestion.

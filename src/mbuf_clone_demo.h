@@ -1,11 +1,11 @@
 #ifndef MBUF_CLONE_DEMO_H
 #define MBUF_CLONE_DEMO_H
 
+#include <rte_mempool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <rte_mempool.h>
 
 /**
  * @brief Run a standalone demonstration of mbuf clone / copy semantics.

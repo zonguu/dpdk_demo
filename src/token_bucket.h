@@ -1,12 +1,12 @@
 #ifndef TOKEN_BUCKET_H
 #define TOKEN_BUCKET_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /*
  * Simple per-core token bucket rate limiter.

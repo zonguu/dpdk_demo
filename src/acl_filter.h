@@ -1,12 +1,12 @@
 #ifndef ACL_FILTER_H
 #define ACL_FILTER_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /*
  * Simple hard-coded 5-tuple ACL rule.

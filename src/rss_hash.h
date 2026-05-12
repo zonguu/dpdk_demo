@@ -1,12 +1,12 @@
 #ifndef RSS_HASH_H
 #define RSS_HASH_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /* Maximum number of worker rings for software RSS dispatch */
 #define RSS_MAX_WORKERS 4

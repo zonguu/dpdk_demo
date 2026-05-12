@@ -1,12 +1,12 @@
 #ifndef FLOW_TABLE_H
 #define FLOW_TABLE_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /*
  * Simple per-flow statistics using DPDK rte_hash.

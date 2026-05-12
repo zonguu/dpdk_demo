@@ -1,12 +1,12 @@
 #ifndef PACKET_PREFETCH_H
 #define PACKET_PREFETCH_H
 
+#include <rte_mbuf.h>
+#include <rte_prefetch.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <rte_mbuf.h>
-#include <rte_prefetch.h>
 
 /**
  * @brief Prefetch packet data for a burst of mbufs.

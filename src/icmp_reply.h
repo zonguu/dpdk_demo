@@ -1,12 +1,12 @@
 #ifndef ICMP_REPLY_H
 #define ICMP_REPLY_H
 
+#include <rte_mbuf.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <rte_mbuf.h>
-#include <stdint.h>
 
 /**
  * @brief Convert an ICMP Echo Request into an Echo Reply and send it.

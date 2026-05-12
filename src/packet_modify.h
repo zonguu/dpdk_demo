@@ -1,11 +1,11 @@
 #ifndef PACKET_MODIFY_H
 #define PACKET_MODIFY_H
 
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <rte_mbuf.h>
 
 /*
  * Swap source/destination MAC addresses.

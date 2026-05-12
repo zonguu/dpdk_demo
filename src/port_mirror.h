@@ -1,12 +1,12 @@
 #ifndef PORT_MIRROR_H
 #define PORT_MIRROR_H
 
+#include <stdint.h>
+#include <rte_mbuf.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <rte_mbuf.h>
 
 /**
  * @brief Send a clone of each packet to a mirror port.
