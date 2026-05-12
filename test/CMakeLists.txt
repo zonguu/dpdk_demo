@@ -38,6 +38,9 @@ add_executable(dpdk_demo_test
     test_icmp_reply.cpp
     test_tx_retry.cpp
     test_mbuf_clone_demo.cpp
+    test_rss_hash.cpp
+    test_pcap_dump.cpp
+    test_port_mirror.cpp
 )
 
 set_target_properties(dpdk_demo_test PROPERTIES
